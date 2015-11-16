@@ -202,6 +202,7 @@ class qxx(Task.classes['cxx']):
 			delattr(self, 'cache_sig')
 
 	def moc_h_ext(self):
+                ext = []
 		try:
 			ext = Options.options.qt_header_ext.split()
 		except AttributeError:
@@ -234,6 +235,7 @@ class qxx(Task.classes['cxx']):
 		for d in bld.raw_deps.get(self.uid(), []):
 			if not d.endswith('.moc'):
 				continue
+                        print 'found moc task', str(d)
 
 			# process that base.moc only once
 			if d in mocfiles:

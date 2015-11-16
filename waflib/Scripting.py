@@ -344,11 +344,71 @@ class Dist(Context.Context):
 	fun = 'dist'
 	algo = 'tar.bz2'
 	ext_algo = {}
+	variant = ''
+
+	def __init__(self, **kw):
+		super(Dist, self).__init__(**kw)
+
+		self.top_dir = kw.get('top_dir', Context.top_dir)
+
+		self.run_dir = kw.get('run_dir', Context.run_dir)
+
+
+		# output directory - may be set until the nodes are considered
+		self.out_dir = kw.get('out_dir', Context.out_dir)
+
+		self.cache_dir = kw.get('cache_dir', None)
+		if not self.cache_dir:
+			self.cache_dir = os.path.join(self.out_dir, Build.CACHE_DIR)
+
+		# map names to environments, the '' must be defined
+		self.all_envs = {}
+
+	def get_env(self):
+		"""Getter for the env property"""
+		try:
+			return self.all_envs[self.variant]
+		except KeyError:
+			return self.all_envs['']
+	def set_env(self, val):
+		"""Setter for the env property"""
+		self.all_envs[self.variant] = val
+
+	env = property(get_env, set_env)
+
+	def load_envs(self):
+		"""
+		The configuration command creates files of the form ``build/c4che/NAMEcache.py``. This method
+		creates a :py:class:`waflib.ConfigSet.ConfigSet` instance for each ``NAME`` by reading those
+		files. The config sets are then stored in the dict :py:attr:`waflib.Build.BuildContext.allenvs`.
+		"""
+		node = self.root.find_node(self.cache_dir)
+		if not node:
+			raise Errors.WafError('The project was not configured: run "waf configure" first!')
+		lst = node.ant_glob('**/*%s' % Build.CACHE_SUFFIX, quiet=True)
+
+		if not lst:
+			raise Errors.WafError('The cache directory is empty: reconfigure the project')
+
+		for x in lst:
+			name = x.path_from(node).replace(Build.CACHE_SUFFIX, '').replace('\\', '/')
+			env = ConfigSet.ConfigSet(x.abspath())
+			self.all_envs[name] = env
+			for f in env[Build.CFG_FILES]:
+				newnode = self.root.find_resource(f)
+				try:
+					h = Utils.h_file(newnode.abspath())
+				except (IOError, AttributeError):
+					Logs.error('cannot find %r' % f)
+					h = Utils.SIG_NIL
+				newnode.sig = h
 
 	def execute(self):
 		"""
 		See :py:func:`waflib.Context.Context.execute`
 		"""
+		if not self.all_envs:
+			self.load_envs()
 		self.recurse([os.path.dirname(Context.g_module.root_path)])
 		self.archive()
 
